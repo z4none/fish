@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="renderer" content="webkit">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <script type="text/javascript" src="js/pixi.js"></script>
+    <script type="text/javascript" src="js/jquery-2.1.4.min.js"></script>
+    <style>
+        body{
+            margin: 0px;
+            padding: 0px;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+<script type="text/javascript">
+var width = $(window).width(), height = $(window).height(); // 视窗高宽
+var speedMax = 2; // 速度：1，2，3，4
+var gravity = 10; // 加速度
+var count = 5; // 数量
+var attractRange = 50; // 游动到目标的判定距离
+var trackerVisible = false;
+
+function createFish(options){
+    // 一条鱼的参数
+    //  size - 大小
+    //  x, y - 初始位置
+    //  speedMax - 最快速度
+    var settings = $.extend( {}, {
+        size: 1.0,
+        x: Math.random() * width,
+        y: Math.random() * height,
+        speedMax: speedMax,
+        opacity: 1.0,
+    }, options );
+
+    // 定位点，用于模拟鱼游动效果
+    var points = [];
+    points.push(new PIXI.Point(0, 0));
+    points.push(new PIXI.Point(100, 50));
+    points.push(new PIXI.Point(200, 200));
+    points.push(new PIXI.Point(300, 300));
+
+    // 鱼身，鱼鳍
+    var fishBody = new PIXI.mesh.Rope(PIXI.Texture.fromImage('images/fish_red.png'), points);
+    var fishFinLeft = new PIXI.Sprite(PIXI.Texture.fromImage('images/fish_fin_red.png'));
+    var fishFinRight = new PIXI.Sprite(PIXI.Texture.fromImage('images/fish_fin_red.png'));
+
+    // 鱼（整体）
+    var fish = new PIXI.Container();
+
+    // 辅助线 Graphics
+    var g = new PIXI.Graphics();
+
+    // 初始化鱼位置
+    fish.position.x = settings.x;
+    fish.position.y = settings.y;
+
+    // 鱼鳍位置
+    fishFinLeft.anchor.x = 0;
+    fishFinLeft.anchor.y = 0.5;
+    fishFinLeft.x = 70;
+    fishFinLeft.y = -25;
+
+    fishFinRight.anchor.x = 0;
+    fishFinRight.anchor.y = 0.5;
+    fishFinRight.x = 70;
+    fishFinRight.y = 25;
+    fishFinRight.scale.y = -1;
+
+    // 大小
+    fish.scale.set(settings.size);
+
+    // 添加相关元素到 fish
+    fish.addChild(fishBody);
+    fish.addChild(fishFinLeft);
+    fish.addChild(fishFinRight);
+    fish.addChild(g);
+
+    // 初始化速度
+    fish.speed = {
+        x: (Math.random() - 0.5) * settings.speedMax,
+        y: (Math.random() - 0.5) * settings.speedMax,
+        zero: false
+    };
+
+    fish.turning = 0;
+    fish.tickSpeed = 0.03 * (Math.random() + 2);
+    fish.onArrived = null;
+    fish.arrived = false;
+
+    fish.dst = {x: 0, y: 0};
+
+    function attractTo(dst){
+        fish.dst.x = dst.x + attractRange * (0.5 - Math.random());
+        fish.dst.y = dst.y + attractRange * (0.5 - Math.random());
+        fish.arrived = false;
+    }
+
+    function setSpeedMax(sm){
+        settings.speedMax = sm;
+    }
+
+    function normalizeSpeed(){
+        var speedNow = Math.sqrt(fish.speed.x * fish.speed.x + fish.speed.y * fish.speed.y);
+        if(speedNow) {
+            fish.speed.x = fish.speed.x * settings.speedMax / speedNow;
+            fish.speed.y = fish.speed.y * settings.speedMax / speedNow;
+        }
+    }
+
+    function calcAngle(x, y){
+        var a;
+        if(x == 0){
+            if(y == 0) return NaN;
+            a = (y > 0)? Math.PI / 2:  Math.PI * 3 / 2;
+        }
+        else if(x < 0) {
+            a = Math.atan(y/x);
+            a = Math.PI + a;
+        }
+        else {
+            a = Math.atan(y/x);
+            if(y < 0){
+                a = Math.PI * 2 + a;
+             }
+        }
+        return a;
+    }
+
+    var tick = Math.random();
+    
+    function swim(){
+        var dx = fish.dst.x - fish.position.x;
+        var dy = fish.dst.y - fish.position.y;
+        var distance = Math.sqrt(dx * dx + dy * dy);
+        if(distance) {
+            // speedMax 一般为 1，2，3，4
+            var a = settings.speedMax * settings.speedMax * 10 / (distance * distance);
+
+            fish.speed.x += a * dx;
+            fish.speed.y += a * dy;
+        }
+
+        fish.turning = ((Math.abs(calcAngle(fish.speed.x, fish.speed.y) - calcAngle(dx, dy)) || 0) + fish.turning) / 2;
+        fish.speed.zero = (distance < 5);
+        if(distance < 5 && !fish.arrived && fish.onArrived) {
+            fish.onArrived(this);
+            fish.arrived = true;
+        }
+
+        normalizeSpeed();
+        
+        tick += fish.tickSpeed * settings.speedMax;
+
+        fish.position.x += fish.speed.zero ? 0 : fish.speed.x;
+        fish.position.y += fish.speed.zero ? 0 : fish.speed.y;
+        
+        //*
+        if(fish.speed.x){
+            fish.rotation = Math.atan(fish.speed.y / fish.speed.x) + (fish.speed.x > 0 ? Math.PI : 0);
+        }
+        else if(fish.speed.y) {
+            fish.rotation = (fish.speed.y > 0) ? Math.PI/2 : -Math.PI/2; 
+        }
+        
+        for (var i = 0; i < points.length; i++) {
+            points[i].y = Math.sin((points[i].x / 200.0) - tick) * (1 + fish.turning) * 10 * i;
+            points[i].x = i * 100 - Math.cos((i * 0.3) + tick) * 1.5 * i;
+        }
+
+        fishFinLeft.y = -20 + points[1].y; 
+        fishFinRight.y = 20 + points[1].y;
+        fishFinLeft.scale.y = Math.sin(tick);
+        fishFinRight.scale.y = Math.sin(tick);
+
+        if(settings.opacity > fish.alpha){
+            fish.alpha = Math.min(fish.alpha + 0.01, settings.opacity);
+        }
+        else if(settings.opacity < fish.alpha){
+            fish.alpha = Math.max(fish.alpha - 0.01, settings.opacity);
+        }
+    }
+
+    function drawTrack(sg){
+        g.clear();
+
+        if(!trackerVisible) return;
+        if(!fish.alpha) return;
+        
+        g.beginFill(0xff0022);
+        g.drawCircle(points[0].x, points[0].y, 10);
+        g.drawCircle(points[1].x, points[1].y, 10);
+        g.drawCircle(points[2].x, points[2].y, 10);
+        g.drawCircle(points[3].x, points[3].y, 10);
+        g.endFill();
+
+        sg.lineStyle(2, 0xffc2c2);
+        sg.moveTo(fish.position.x, fish.position.y);
+        sg.lineTo(fish.dst.x, fish.dst.y);
+    }
+
+    function setOpacity(opacity){
+        settings.opacity = opacity;
+    }
+
+    return {
+        obj: fish,
+        swim: swim,
+        attractTo: attractTo,
+        drawTrack: drawTrack,
+        setSpeedMax: setSpeedMax,
+        setOpacity: setOpacity,
+    };
+}
+
+var fishs = new Array();
+
+//
+function setFishParam(speed, count){
+    $(fishs).each(function(i, fish){
+        fish.setSpeedMax(speed);
+        if(!(count === undefined)){
+            if(i < count) fish.setOpacity(1.0);
+            else fish.setOpacity(0.0);
+        }
+    });
+}
+
+//
+function setTrackerVisible(visible){
+    if(visible === undefined) trackerVisible = !trackerVisible;
+    else trackerVisible = visible;
+}
+
+
+$(function(){
+
+    var renderer = new PIXI.autoDetectRenderer(width, height, {backgroundColor : 0xeeeeee, antialias: true, forceFXAA: true});
+
+    $("body").append(renderer.view);
+
+    var stage = new PIXI.Container();
+    stage.scale.y = 0.95;
+
+    var container = new PIXI.Container();
+    stage.addChild(container);
+
+    var sg = new PIXI.Graphics();
+    stage.addChild(sg);
+    
+    for(var i=0; i<count; i++){
+        var fish =createFish({
+            size: Math.min(0.15 * width / 350, 0.3)
+        });
+        fish.obj.onArrived = function(fish){
+            setTimeout(function(){
+                fish.attractTo({
+                    x: width / 2 + (0.5 - Math.random()) * width,
+                    y: height / 2 + (0.5 - Math.random()) * height,
+                });
+            }, Math.random() * 2000)
+            
+        }
+
+        fish.attractTo({
+            x: width / 2 + (0.5 - Math.random()) * width / 2,
+            y: height / 2 + (0.5 - Math.random()) * height / 2,
+        });
+        
+        fishs.push(fish);
+        container.addChild(fish.obj);
+    }  
+    
+    var cursor = {x: 300, y: 300};
+    $(renderer.view).on("click", function(e){
+        var offset = $(this).offset();
+        cursor.x = e.pageX - offset.left;
+        cursor.y = e.pageY - offset.top;
+
+        $(fishs).each(function(i, fish){
+            fish.attractTo(cursor);
+        });
+    });
+
+    animate();
+
+    var tick = 0;
+    function animate() {
+        sg.clear();
+        $(fishs).each(function(i, fish){
+            fish.swim();
+            fish.drawTrack(sg);
+        });
+
+		tick += 1;
+		
+        renderer.render(stage);
+        requestAnimationFrame(animate);
+    }
+
+    $(document).on('mousemove', function(e){
+        e.stopPropagation();
+    })
+});
+</script>
+</body>
+</html>

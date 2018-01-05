@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="renderer" content="webkit">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <script type="text/javascript" src="js/pixi.js"></script>
+    <script type="text/javascript" src="js/jquery-2.1.4.min.js"></script>
+    <style>
+        body{
+            margin: 0px;
+            padding: 0px;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+<script type="text/javascript">
+var width = $(window).width(), height = $(window).height();
+
+$(function(){
+
+    var renderer = new PIXI.autoDetectRenderer(width, height, {backgroundColor : 0xeeeeee, antialias: true, forceFXAA: true});
+
+    $("body").append(renderer.view);
+
+    var stage = new PIXI.Container();
+    stage.scale.y = 0.95;
+
+    var container = new PIXI.Container();
+    stage.addChild(container);
+
+    var sg = new PIXI.Graphics();
+    stage.addChild(sg);
+
+    var fish = new PIXI.Container();
+
+    var points = [];
+    points.push(new PIXI.Point(0, 0));
+    points.push(new PIXI.Point(100, 50));
+    points.push(new PIXI.Point(200, 200));
+    points.push(new PIXI.Point(300, 300));
+
+    var fishBody = new PIXI.mesh.Rope(PIXI.Texture.fromImage('images/fish_red.png'), points);
+	var fishFinLeft = new PIXI.Sprite(PIXI.Texture.fromImage('images/fish_fin_red.png'));
+	var fishFinRight = new PIXI.Sprite(PIXI.Texture.fromImage('images/fish_fin_red.png'));
+
+	fish.position.x = fish.position.y = 100;
+
+	fishFinLeft.anchor.x = 0;
+	fishFinLeft.anchor.y = 0.5;
+	fishFinLeft.x = 70;
+	fishFinLeft.y = -25;
+
+	fishFinRight.anchor.x = 0;
+	fishFinRight.anchor.y = 0.5;
+	fishFinRight.x = 70;
+	fishFinRight.y = 25;
+	fishFinRight.scale.y = -1;
+
+	fish.addChild(fishBody);
+	fish.addChild(fishFinLeft);
+	fish.addChild(fishFinRight);
+    
+    container.addChild(fish); 
+
+    animate();
+
+	var tick = 0;
+    function animate() {
+        sg.clear();
+        tick += 0.1;
+
+        for (var i = 0; i < points.length; i++) {
+            points[i].y = Math.sin((points[i].x / 200.0) - tick) * (1 + 0) * 10 * i;
+            points[i].x = i * 100 - Math.cos((i * 0.3) + tick) * 1.5 * i;
+        }
+
+        fishFinLeft.y = -20 + points[1].y; 
+        fishFinRight.y = 20 + points[1].y;
+        fishFinLeft.scale.y = Math.sin(tick);
+        fishFinRight.scale.y = Math.sin(tick);
+        
+        renderer.render(stage);
+        requestAnimationFrame(animate);
+    }
+});
+</script>
+</body>
+</html>
